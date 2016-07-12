@@ -17,6 +17,7 @@
 #include <sel4platsupport/arch/io.h>
 #include <sel4utils/vspace.h>
 #include <sel4utils/stack.h>
+#include <allocman/utspace/split.h>
 #include <allocman/bootstrap.h>
 #include <allocman/vka.h>
 #include <simple/simple_helpers.h>
@@ -78,7 +79,7 @@ typedef struct proxy_vka {
     allocman_t *allocman;
     vka_t regular_vka;
     vspace_t vspace;
-    utspace_trickle_t ram_ut_manager;
+    utspace_split_t ram_ut_manager;
     int recurse;
     void *temp_map_address;
     reservation_t temp_map_reservation;
@@ -114,8 +115,8 @@ int proxy_vka_utspace_alloc(void *data, const cspacepath_t *dest, seL4_Word type
     if (!node) {
         return -1;
     }
-    if (type == seL4_IA32_4K && vka->have_mem && vka->vspace.map_pages_at_vaddr && !vka->recurse) {
-        cookie = _utspace_trickle_alloc(vka->allocman, &vka->ram_ut_manager, seL4_PageBits, seL4_IA32_4K, dest, &error);
+    if (type == seL4_X86_4K && vka->have_mem && vka->vspace.map_pages_at_vaddr && !vka->recurse) {
+        cookie = _utspace_split_alloc(vka->allocman, &vka->ram_ut_manager, seL4_PageBits, seL4_X86_4K, dest, ALLOCMAN_NO_PADDR, true, &error);
         if (error != 0) {
             vka->have_mem = 0;
         } else {
@@ -144,13 +145,18 @@ int proxy_vka_utspace_alloc(void *data, const cspacepath_t *dest, seL4_Word type
     return error;
 }
 
+int proxy_vka_utspace_alloc_at(void *data, const cspacepath_t *dest, seL4_Word type, seL4_Word size_bits, uintptr_t paddr, seL4_Word *cookie) {
+    assert(!"not implemented");
+    return -1;
+}
+
 void proxy_vka_utspace_free(void *data, seL4_Word type, seL4_Word size_bits, uint32_t target) {
     proxy_vka_t *vka = (proxy_vka_t*)data;
     ut_node_t *node = (ut_node_t*)target;
     if (!node->frame) {
         vka_utspace_free(&vka->regular_vka, type, size_bits, node->cookie);
     } else {
-        _utspace_trickle_free(vka->allocman, &vka->ram_ut_manager, node->cookie, size_bits);
+        _utspace_split_free(vka->allocman, &vka->ram_ut_manager, node->cookie, size_bits);
     }
     allocman_mspace_free(vka->allocman, node, sizeof(*node));
 }
@@ -159,7 +165,7 @@ uintptr_t proxy_vka_utspace_paddr(void *data, uint32_t target, seL4_Word type, s
     proxy_vka_t *vka = (proxy_vka_t*)data;
     ut_node_t *node = (ut_node_t*)target;
     if (node->frame) {
-        return _utspace_trickle_paddr(&vka->ram_ut_manager, node->cookie, size_bits);
+        return _utspace_split_paddr(&vka->ram_ut_manager, node->cookie, size_bits);
     } else {
         return vka_utspace_paddr(&vka->regular_vka, node->cookie, type, size_bits);
     }
@@ -181,7 +187,7 @@ static void make_proxy_vka(vka_t *vka, allocman_t *allocman) {
     proxy->allocman = allocman;
     allocman_make_vka(&proxy->regular_vka, allocman);
 
-    utspace_trickle_create(&proxy->ram_ut_manager);
+    utspace_split_create(&proxy->ram_ut_manager);
     for (int i = 0; i < num; i++) {
         cspacepath_t path;
         seL4_CPtr cap;
@@ -189,7 +195,7 @@ static void make_proxy_vka(vka_t *vka, allocman_t *allocman) {
         int size_bits;
         ram_get_untyped(i, &paddr, &size_bits, &cap);
         vka_cspace_make_path(&proxy->regular_vka, cap, &path);
-        error = _utspace_trickle_add_uts(allocman, &proxy->ram_ut_manager, 1, &path, (uint32_t*)&size_bits, &paddr);
+        error = _utspace_split_add_uts(allocman, &proxy->ram_ut_manager, 1, &path, (uint32_t*)&size_bits, &paddr, ALLOCMAN_UT_DEV_MEM);
         assert(!error);
     }
     if (num > 0) {
@@ -200,6 +206,7 @@ static void make_proxy_vka(vka_t *vka, allocman_t *allocman) {
         proxy_vka_cspace_alloc,
         proxy_vka_cspace_make_path,
         proxy_vka_utspace_alloc,
+        proxy_vka_utspace_alloc_at,
         proxy_vka_cspace_free,
         proxy_vka_utspace_free,
         proxy_vka_utspace_paddr
@@ -220,7 +227,7 @@ static seL4_Error simple_frame_cap_wrapper(void *data, void *paddr, int size_bit
     /* Check whether it is a guest mapped region. */
     cap = guest_mappings_get_mapping_mem_frame((uintptr_t)paddr);
     if (cap != 0) {
-        printf("Guest map found at 0x%x\n", paddr);
+        printf("Guest map found at %p\n", paddr);
         vka_cspace_make_path(&vka, cap, path);
         return 0;
     }
@@ -243,7 +250,7 @@ void pre_init(void) {
         NULL
     };
     camkes_make_simple(&camkes_simple);
-    camkes_simple.IOPort_cap = simple_ioport_wrapper;
+    camkes_simple.arch_simple.IOPort_cap = simple_ioport_wrapper;
     camkes_simple.frame_cap = simple_frame_cap_wrapper;
 
     /* Initialize allocator */
@@ -575,8 +582,9 @@ static void init_irqs() {
         assert(!error);
         error = vka_cnode_mint(&badge_path, &async_path, seL4_AllRights, seL4_CapData_Badge_new(irq_badges[dest]));
         assert(!error);
-        error = seL4_IRQHandler_SetMode(irq_handler, level_trig, active_low);
-        assert(!error);
+        assert(!"mode is set when making irq handler");
+//        error = seL4_IRQHandler_SetMode(irq_handler, level_trig, active_low);
+//        assert(!error);
         error = seL4_IRQHandler_SetNotification(irq_handler, badge_path.capPtr);
         assert(!error);
         error = seL4_IRQHandler_Ack(irq_handler);
