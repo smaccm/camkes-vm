@@ -13,6 +13,7 @@
 #include <lwip/udp.h>
 #include <sync/sem-bare.h>
 #include <string.h>
+#include <camkes/sel4.h>
 
 /*- set ep = alloc('ep', seL4_EndpointObject, read=True, write=True) -*/
 
@@ -107,7 +108,7 @@ void /*? me.to_interface.name ?*/__run(void) {
             }
         }
         assert(client);
-        result = seL4_CNode_SaveCaller(/*? cnode ?*/, /*? reply_cap_slot ?*/, 32);
+        result = camkes_cnode_save_caller(/*? cnode ?*/, /*? reply_cap_slot ?*/, 32);
         assert(result == seL4_NoError);
         lwip_lock();
         len = 0;
