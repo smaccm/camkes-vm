@@ -8,17 +8,15 @@
  * @TAG(NICTA_GPL)
  */
 
-import <PutChar.idl4>;
-import <VchanInterface.idl4>;
+import <UDPSend.idl4>;
+import <UDPRecv.idl4>;
 
 component HelloWorld {
     control;
 
-    include "vmm/vchan_sharemem.h";
-    dataport vchan_headers_t share_mem;
-    uses VchanInterface vchan_con;
-
-    consumes VchanEvent vevent;
-
-    uses PutChar putchar;
+    uses UDPSend client_send;
+    uses UDPRecv client_recv;
+    dataport Buf client_send_buf;
+    dataport Buf client_recv_buf;
+    consumes Notification client_recv_ready;
 }

@@ -104,7 +104,13 @@ static void emul_raw_poll(struct eth_driver *driver) {
 }
 
 static void emul_low_level_init(struct eth_driver *driver, uint8_t *mac, int *mtu) {
-    ethdriver_mac(&mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+//    ethdriver_mac(&mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+    mac[0] = 0x6;
+    mac[1] = 0x0;
+    mac[2] = 0x0;
+    mac[3] = 0xb;
+    mac[4] = 0xc;
+    mac[5] = 0xd;
     *mtu = 1500;
 }
 

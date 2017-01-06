@@ -25,7 +25,7 @@ set -e
 
 LINUX_MD5="9e519daf194026fc1db05dd320e4a505"
 LINUX_MAJOR="4"
-LINUX_VERSION="$LINUX_MAJOR.7.2"
+LINUX_VERSION="$LINUX_MAJOR.8.0"
 LINUX_DIR="linux-$LINUX_VERSION"
 LINUX_ARCHIVE="$LINUX_DIR.tar.gz"
 LINUX_URL="https://www.kernel.org/pub/linux/kernel/v$LINUX_MAJOR.x/$LINUX_ARCHIVE"
@@ -34,17 +34,15 @@ OUT=out
 MODULES_DIR=modules
 PKG_DIR=pkg
 TEXT_DIR=text
-INIT_TEMPLATE=init_template
+INIT_TEMPLATE=camkes_init_template
+INIT_DEST=/usr/local/bin/camkes_init
 CONFIG_DIR=config
 LINUX_CONFIG=linux_build_config
 LINUX_SYMVERS=Module.symvers
 
 # Script containing application-specific camkes init commands
-CAMKES_INIT=camkes_init
-# 2 digit number from 00 to 99 determining how late during
-# system initialisation the camkes init script will run.
-# Higher is later.
-CAMKES_INIT_NUM=90
+CAMKES_INIT=camkes_app_init
+CAMKES_CONF=camkes-init.conf
 
 ROOTFS_SRC=rootfs-bare.cpio
 ROOTFS_DEST=rootfs.cpio
@@ -53,15 +51,17 @@ ROOTFS_TMP=rootfs
 STATIC_LIBRARY_OUT=static_lib
 STATIC_LIBRARY_SRC=lib_src
 
+LINUX_BZIMAGE=bzimage
+
 if test ! -d $OUT; then
     rm -rf $OUT
     mkdir -p $OUT
 fi
 
-if test ! -e "$OUT/$LINUX_ARCHIVE"; then
-    echo -e "\e[1;96mDownloading linux source...\e[0m"
-    wget -O "$OUT/$LINUX_ARCHIVE" $LINUX_URL
-fi
+#if test ! -e "$OUT/$LINUX_ARCHIVE"; then
+    #echo -e "\e[1;96mDownloading linux source...\e[0m"
+    #wget -O "$OUT/$LINUX_ARCHIVE" $LINUX_URL
+#fi
 
 if test ! -d "$OUT/$LINUX_DIR"; then
     echo -e "\e[1;96mExtracting linux source...\e[0m"
@@ -74,6 +74,14 @@ fi
 echo -e "\e[1;96mCopying linux configs into linux source dir...\e[0m"
 cp -v $CONFIG_DIR/$LINUX_CONFIG $OUT/$LINUX_DIR/.config
 cp -v $CONFIG_DIR/$LINUX_SYMVERS $OUT/$LINUX_DIR
+
+if test "$1" == "-k"; then
+    echo -e "\e[1;96mCompiling linux...\e[0m"
+    pushd $OUT/$LINUX_DIR
+    make -j
+    popd
+    cp -v $OUT/$LINUX_DIR/arch/x86/boot/bzImage $LINUX_BZIMAGE
+fi
 
 echo -e "\e[1;96mPreparing linux source to build kernel modules...\e[0m"
 pushd $OUT/$LINUX_DIR
@@ -111,10 +119,16 @@ for module in $MODULES_DIR/*; do
 done
 
 echo -e "\e[1;96mAdding custom init script to root filesystem...\e[0m"
-cat $INIT_TEMPLATE | sed -re "s/__LINUX_VERSION__/$LINUX_VERSION/g" | tee $OUT/$ROOTFS_TMP/init
+mkdir -pv `dirname $OUT/$ROOTFS_TMP$INIT_DEST`
+cat $INIT_TEMPLATE | sed -re "s/__LINUX_VERSION__/$LINUX_VERSION/g" | tee $OUT/$ROOTFS_TMP$INIT_DEST
+chmod a+x $OUT/$ROOTFS_TMP$INIT_DEST
 
 echo -e "\e[1;96mAdding CAmkES init script to root filesystem...\e[0m"
-cp -v $CAMKES_INIT $OUT/$ROOTFS_TMP/etc/init.d/S$CAMKES_INIT_NUM$CAMKES_INIT
+cp -v $CAMKES_INIT $OUT/$ROOTFS_TMP/usr/local/bin/$CAMKES_INIT
+
+echo -e "\e[1;96mAdding CAmkES boot configuration script...\e[0m"
+mkdir -pv $OUT/$ROOTFS_TMP/etc/init
+cp -v $CAMKES_CONF $OUT/$ROOTFS_TMP/etc/init/$CAMKES_CONF
 
 echo -e "\e[1;96mBuilding static libraries...\e[0m"
 STATIC_LIBRARY_PATH=`pwd`/$OUT/$STATIC_LIBRARY_OUT

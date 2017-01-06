@@ -242,9 +242,9 @@ int client_rx(int *len) {
             client = &clients[i];
         }
     }
+    ethdriver_lock();
     assert(client);
     void *packet = client->dataport;
-    ethdriver_lock();
     if (client->rx_head == client->rx_tail) {
         client->should_notify = 1;
         ethdriver_unlock();
@@ -283,9 +283,9 @@ void client_tx(int len) {
             client = &clients[i];
         }
     }
+    ethdriver_lock();
     assert(client);
     void *packet = client->dataport;
-    ethdriver_lock();
     /* silently drop packets */
     if (client->num_tx != 0) {
         client->num_tx --;
@@ -310,12 +310,9 @@ void client_mac(uint8_t *b1, uint8_t *b2, uint8_t *b3, uint8_t *b4, uint8_t *b5,
     assert(client);
     assert(done_init);
     ethdriver_lock();
-    *b1 = client->mac[0];
-    *b2 = client->mac[1];
-    *b3 = client->mac[2];
-    *b4 = client->mac[3];
-    *b5 = client->mac[4];
-    *b6 = client->mac[5];
+    printf("\n===================================\n");
+    printf("%x %x %x %x %x %x", client->mac[0], client->mac[1], client->mac[2], client->mac[3], client->mac[4], client->mac[5]);
+    printf("\n===================================\n");
     ethdriver_unlock();
 }
 
@@ -328,7 +325,7 @@ void irq_handle() {
 
 /* Returns the cap to the frame mapped to vaddr, assuming
  * vaddr points inside our dma pool. */
-static seL4_CPtr get_dma_frame_cap(vspace_t *vspace, void *vaddr) {
+static seL4_CPtr get_dma_frame_cap(vspace_t *vspace, void *vaddr) {\
     seL4_CPtr cap = camkes_dma_get_cptr(vaddr);
     if (cap == seL4_CapNull) {
         return original_vspace_get_cap(vspace, vaddr);
@@ -347,6 +344,7 @@ static void* camkes_iommu_dma_alloc(ps_dma_man_t *dma, size_t size,
     }
     int error = sel4utils_iommu_dma_alloc_iospace(dma, vaddr, size);
     if (error) {
+        printf("there was an error %d\n", error);
         camkes_dma_free(vaddr, size);
         return NULL;
     }
@@ -387,8 +385,10 @@ void post_init(void) {
     assert(!error);
     error = sel4platsupport_get_io_port_ops(&ioops.io_port_ops, &camkes_simple);
     assert(!error);
+    printf("\na\n");
     /* preallocate buffers */
     for (int i = 0; i < RX_BUFS; i++) {
+        printf("\ne: %d\n", i);
         void *buf = camkes_iommu_dma_alloc(&ioops.dma_manager, BUF_SIZE, 4, 1, PS_MEM_NORMAL);
         assert(buf);
         uintptr_t phys = ps_dma_pin(&ioops.dma_manager, buf, BUF_SIZE);
@@ -396,9 +396,12 @@ void post_init(void) {
         rx_bufs[num_rx_bufs] = buf;
         num_rx_bufs++;
     }
+    printf("\nb\n");
     num_clients = client_num_badges();
+    printf("\nnum_clients %d\n", num_clients);
     clients = calloc(num_clients, sizeof(client_t));
     for (int client = 0; client < num_clients; client++) {
+        printf("\nd: %d\n", client);
         clients[client].should_notify = 1;
         clients[client].client_id = client_enumerate_badge(client);
         clients[client].dataport = client_buf(clients[client].client_id);
@@ -414,12 +417,14 @@ void post_init(void) {
             clients[client].num_tx++;
         }
     }
+    printf("\nc\n");
     eth_driver.cb_cookie = NULL;
     eth_driver.i_cb = ethdriver_callbacks;
     ethif_intel_config_t eth_config = (ethif_intel_config_t) {
         .bar0 = (void*)EthDriver
     };
 
+    printf("device model %s\n", device_model);
     if (strcmp(device_model, "82574") == 0){
         error = ethif_e82574_init(&eth_driver, ioops, &eth_config);
     } else if (strcmp(device_model, "82580") == 0){

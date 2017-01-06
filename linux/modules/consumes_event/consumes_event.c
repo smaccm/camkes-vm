@@ -21,6 +21,7 @@
 #include <linux/interrupt.h>
 #include <linux/poll.h>
 #include <linux/workqueue.h>
+#include <linux/sched.h>
 #include <linux/mutex.h>
 
 #include <asm/uaccess.h>

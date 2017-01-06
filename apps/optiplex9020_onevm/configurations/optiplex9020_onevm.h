@@ -10,9 +10,14 @@
  * @TAG(D61_GPL)
  */
 
-#define VM_NUM_GUESTS 2
+#define VM_NUM_GUESTS 1
 
 /* All our guests use the same kernel image, rootfs and cmdline */
 #define C162_KERNEL_IMAGE "bzimage"
 #define C162_ROOTFS "rootfs.cpio"
-#define VM_GUEST_CMDLINE "earlyprintk=ttyS0,115200 console=ttyS0,115200 root=/dev/mem i8042.nokbd=y i8042.nomux=y i8042.noaux=y io_delay=udelay noisapnp pci=nomsi"
+
+// use  this for debian/ubuntu systems
+//#define VM_GUEST_CMDLINE "earlyprintk=ttyS0,115200 console=ttyS0,115200 i8042.nokbd=y i8042.nomux=y i8042.noaux=y io_delay=udelay noisapnp pci=nomsi rdinit=/sbin/init 1"
+
+// use this for buildroot systems
+#define VM_GUEST_CMDLINE "earlyprintk=ttyS0,115200 console=ttyS0,115200 i8042.nokbd=y i8042.nomux=y i8042.noaux=y io_delay=udelay noisapnp pci=nomsi rdinit=/init 2 root=/dev/sda1"

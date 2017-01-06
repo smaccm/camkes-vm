@@ -11,7 +11,6 @@
 #ifndef _LIBVCHAN_SEL4_H
 #define _LIBVCHAN_SEL4_H
 
-
 #define DEF_READ_SIZE  1024
 #define DEF_WRITE_SIZE 2048
 

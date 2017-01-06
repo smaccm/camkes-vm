@@ -631,6 +631,7 @@ void *main_continued(void *arg) {
         libpci_device_t *device = libpci_find_device_bdf(bus, dev, fun);
         if (!device) {
             LOG_ERROR("Failed to find device %02x:%02x.%d\n", bus, dev, fun);
+            continue;
             return NULL;
         }
         /* Allocate resources */

@@ -19,9 +19,16 @@
 #include <lwip/igmp.h>
 #include <sel4/sel4.h>
 
+
 static void low_level_init(struct eth_driver *driver, uint8_t *mac, int *mtu) {
     *mtu = 1500;
-    ethdriver_mac(&mac[0],&mac[1],&mac[2],&mac[3],&mac[4],&mac[5]);
+    mac[0] = 6;
+    mac[1] = 0;
+    mac[2] = 0;
+    mac[3] = 11;
+    mac[4] = 12;
+    mac[5] = 13;
+//    ethdriver_mac(&mac[0],&mac[1],&mac[2],&mac[3],&mac[4],&mac[5]);
 }
 
 extern void *ethdriver_buf;
@@ -107,6 +114,7 @@ static ps_io_ops_t io_ops;
 static struct netif _netif;
 static lwip_iface_t _lwip_driver;
 
+#if 0
 void pre_init(void) {
     struct ip_addr netmask, ipaddr, gw, multicast;
     struct netif *netif;
@@ -122,21 +130,74 @@ void pre_init(void) {
     };
     lwip_driver = ethif_new_lwip_driver_no_malloc(io_ops, &io_ops.dma_manager, ethdriver_init, NULL, &_lwip_driver);
     assert(lwip_driver);
-    ipaddr_aton("0.0.0.0",      &gw);
-    ipaddr_aton(udp_ip_addr,  &ipaddr);
-    ipaddr_aton(multicast_addr,  &multicast);
+    ipaddr_aton("192.168.0.1",      &gw);
+    ipaddr_aton("192.168.0.2",  &ipaddr);
+//    ipaddr_aton(multicast_addr,  &multicast);
     ipaddr_aton("255.255.255.0", &netmask);
     lwip_init();
+/*
+    netif = netif_add(&_netif, &ipaddr, &netmask, &gw, lwip_driver, ethif_get_ethif_init(lwip_driver),
+                       ethernet_input);
+*/
     netif = netif_add(&_netif, &ipaddr, &netmask, &gw, lwip_driver, ethif_get_ethif_init(lwip_driver),
                        ethernet_input);
     assert(netif);
     netif_set_up(netif);
     netif_set_default(netif);
 
+
+/*
     if (ip_addr_ismulticast(&multicast)) {
         igmp_joingroup(&ipaddr, &multicast);
     }
+    */
 }
+#endif
+
+
+void pre_init(){
+    struct ip_addr ipaddr, gw, netmask;
+    struct netif *netif;
+    
+    lwip_iface_t *lwip_driver;
+    memset(&io_ops, 0, sizeof(io_ops));
+    io_ops.dma_manager = (ps_dma_man_t) {
+        .cookie = NULL,
+        .dma_alloc_fn = malloc_dma_alloc,
+        .dma_free_fn = malloc_dma_free,
+        .dma_pin_fn = malloc_dma_pin,
+        .dma_unpin_fn = malloc_dma_unpin,
+        .dma_cache_op_fn = malloc_dma_cache_op
+    };
+    lwip_driver = ethif_new_lwip_driver_no_malloc(io_ops, &io_ops.dma_manager, ethdriver_init, NULL, &_lwip_driver);
+    assert(lwip_driver);
+ 
+    ipaddr_aton("192.168.0.1", &gw); // Destination IP address
+    ipaddr_aton("192.168.0.2", &ipaddr); // Address of the current device
+    ipaddr_aton("255.255.255.0", &netmask);    
+
+    // LWIP init
+    lwip_init();
+    netif = netif_add(&_netif, &ipaddr, &netmask, &gw, lwip_driver, ethif_get_ethif_init(lwip_driver), ethernet_input);
+    assert(netif);
+    netif_set_up(netif);
+    netif_set_default(netif);
+    
+    // Make a pcb for UDP connections
+    struct udp_pcb * udp_conn;
+    udp_conn = udp_new();
+
+    // Attempt to send something over that UDP connection    
+    char msg[] = "Testing";
+    struct pbuf *p;
+    
+    p = pbuf_alloc(PBUF_TRANSPORT,sizeof(msg),PBUF_RAM);
+    assert(p);
+    memcpy(p->payload, msg, sizeof(msg));
+    udp_sendto(udp_conn, p, &gw, htons(1234));
+    
+}
+
 
 /* Provided by the Ethdriver template */
 seL4_CPtr ethdriver_notification(void);
